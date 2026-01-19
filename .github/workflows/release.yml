@@ -39,12 +39,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Get current version
-        id: current
-        run: |
-          VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-
       - name: Bump version
         id: bump
         run: |
@@ -55,7 +49,6 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          # Get commits since last tag (or all if no tags)
           LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           if [ -z "$LAST_TAG" ]; then
             COMMITS=$(git log --pretty=format:"- %s (%h)" --reverse)
@@ -63,33 +56,34 @@ jobs:
             COMMITS=$(git log ${LAST_TAG}..HEAD --pretty=format:"- %s (%h)" --reverse)
           fi
           
-          # Create changelog entry
-          CHANGELOG="## v${{ steps.bump.outputs.version }}
-
-### Changes
-
-${COMMITS}
-"
-          # Save for release notes
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGELOG" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          echo "## v${{ steps.bump.outputs.version }}" > /tmp/notes.md
+          echo "" >> /tmp/notes.md
+          echo "### Changes" >> /tmp/notes.md
+          echo "" >> /tmp/notes.md
+          echo "$COMMITS" >> /tmp/notes.md
+          
+          {
+            echo 'notes<<EOF'
+            cat /tmp/notes.md
+            echo 'EOF'
+          } >> $GITHUB_OUTPUT
 
       - name: Update CHANGELOG.md
         run: |
           if [ -f CHANGELOG.md ]; then
-            # Prepend new entry after the header
-            sed -i '1r /dev/stdin' CHANGELOG.md <<< "${{ steps.changelog.outputs.notes }}"
+            cat /tmp/notes.md > /tmp/new_changelog.md
+            echo "" >> /tmp/new_changelog.md
+            cat CHANGELOG.md >> /tmp/new_changelog.md
+            mv /tmp/new_changelog.md CHANGELOG.md
           else
-            # Create new changelog
-            echo "# Changelog
-
-          ${{ steps.changelog.outputs.notes }}" > CHANGELOG.md
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            cat /tmp/notes.md >> CHANGELOG.md
           fi
 
       - name: Commit and tag
         run: |
-          git add Cargo.toml CHANGELOG.md
+          git add Cargo.toml CHANGELOG.md Cargo.lock || true
           git commit -m "chore: release v${{ steps.bump.outputs.version }}"
           git tag -a "v${{ steps.bump.outputs.version }}" -m "Release v${{ steps.bump.outputs.version }}"
 
