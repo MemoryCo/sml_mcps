@@ -4,4 +4,4 @@
 
 mod jwt;
 
-pub use jwt::{JwtValidator, Claims, JwtError};
+pub use jwt::{Claims, JwtError, JwtValidator};

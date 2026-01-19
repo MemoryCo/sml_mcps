@@ -4,14 +4,13 @@
 //!
 //! Run with: cargo run --example http_server --features http
 
-use sml_mcps::{
-    Server, ServerConfig, HttpTransport,
-    Tool, ToolEnv, CallToolResult, Result, McpError, LogLevel,
-};
 use serde_json::Value;
+use sml_mcps::{
+    CallToolResult, HttpTransport, LogLevel, McpError, Result, Server, ServerConfig, Tool, ToolEnv,
+};
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::{Arc, Mutex};
-use tiny_http::{Server as TinyServer, Response, Header, Method};
+use tiny_http::{Header, Method, Response, Server as TinyServer};
 
 /// Shared context - thread-safe for HTTP
 struct AppContext {
@@ -28,8 +27,12 @@ impl AppContext {
 
 struct EchoTool;
 impl Tool<AppContext> for EchoTool {
-    fn name(&self) -> &str { "echo" }
-    fn description(&self) -> &str { "Echo back the input message" }
+    fn name(&self) -> &str {
+        "echo"
+    }
+    fn description(&self) -> &str {
+        "Echo back the input message"
+    }
     fn schema(&self) -> Value {
         serde_json::json!({
             "type": "object",
@@ -40,23 +43,35 @@ impl Tool<AppContext> for EchoTool {
         })
     }
     fn execute(&self, args: Value, _ctx: &mut AppContext, env: &ToolEnv) -> Result<CallToolResult> {
-        let message = args.get("message")
+        let message = args
+            .get("message")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams("Missing 'message' parameter".into()))?;
-        
+
         // This notification will be included in the SSE stream!
         env.log(LogLevel::Info, format!("Echoing: {}", message))?;
-        
+
         Ok(CallToolResult::text(format!("Echo: {}", message)))
     }
 }
 
 struct CounterGetTool;
 impl Tool<AppContext> for CounterGetTool {
-    fn name(&self) -> &str { "counter_get" }
-    fn description(&self) -> &str { "Get the current counter value" }
-    fn schema(&self) -> Value { serde_json::json!({ "type": "object", "properties": {} }) }
-    fn execute(&self, _args: Value, ctx: &mut AppContext, _env: &ToolEnv) -> Result<CallToolResult> {
+    fn name(&self) -> &str {
+        "counter_get"
+    }
+    fn description(&self) -> &str {
+        "Get the current counter value"
+    }
+    fn schema(&self) -> Value {
+        serde_json::json!({ "type": "object", "properties": {} })
+    }
+    fn execute(
+        &self,
+        _args: Value,
+        ctx: &mut AppContext,
+        _env: &ToolEnv,
+    ) -> Result<CallToolResult> {
         let value = ctx.counter.load(Ordering::SeqCst);
         Ok(CallToolResult::text(format!("Counter value: {}", value)))
     }
@@ -64,8 +79,12 @@ impl Tool<AppContext> for CounterGetTool {
 
 struct CounterIncrementTool;
 impl Tool<AppContext> for CounterIncrementTool {
-    fn name(&self) -> &str { "counter_increment" }
-    fn description(&self) -> &str { "Increment the counter and return the new value" }
+    fn name(&self) -> &str {
+        "counter_increment"
+    }
+    fn description(&self) -> &str {
+        "Increment the counter and return the new value"
+    }
     fn schema(&self) -> Value {
         serde_json::json!({
             "type": "object",
@@ -77,20 +96,37 @@ impl Tool<AppContext> for CounterIncrementTool {
     fn execute(&self, args: Value, ctx: &mut AppContext, env: &ToolEnv) -> Result<CallToolResult> {
         let amount = args.get("amount").and_then(|a| a.as_i64()).unwrap_or(1);
         let new_value = ctx.counter.fetch_add(amount, Ordering::SeqCst) + amount;
-        
+
         // Log notification - will be in SSE stream
-        env.log(LogLevel::Debug, format!("Counter incremented by {} to {}", amount, new_value))?;
-        
-        Ok(CallToolResult::text(format!("Counter incremented to: {}", new_value)))
+        env.log(
+            LogLevel::Debug,
+            format!("Counter incremented by {} to {}", amount, new_value),
+        )?;
+
+        Ok(CallToolResult::text(format!(
+            "Counter incremented to: {}",
+            new_value
+        )))
     }
 }
 
 struct CounterResetTool;
 impl Tool<AppContext> for CounterResetTool {
-    fn name(&self) -> &str { "counter_reset" }
-    fn description(&self) -> &str { "Reset the counter to zero" }
-    fn schema(&self) -> Value { serde_json::json!({ "type": "object", "properties": {} }) }
-    fn execute(&self, _args: Value, ctx: &mut AppContext, _env: &ToolEnv) -> Result<CallToolResult> {
+    fn name(&self) -> &str {
+        "counter_reset"
+    }
+    fn description(&self) -> &str {
+        "Reset the counter to zero"
+    }
+    fn schema(&self) -> Value {
+        serde_json::json!({ "type": "object", "properties": {} })
+    }
+    fn execute(
+        &self,
+        _args: Value,
+        ctx: &mut AppContext,
+        _env: &ToolEnv,
+    ) -> Result<CallToolResult> {
         ctx.counter.store(0, Ordering::SeqCst);
         Ok(CallToolResult::text("Counter reset to 0"))
     }
@@ -102,12 +138,17 @@ fn main() {
     eprintln!("Responses use SSE format when tools send notifications");
     eprintln!();
     eprintln!("Test with:");
-    eprintln!("  curl -X POST http://{}/mcp -H 'Content-Type: application/json' \\", addr);
-    eprintln!("    -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"echo\",\"arguments\":{{\"message\":\"hello\"}}}}}}'");
+    eprintln!(
+        "  curl -X POST http://{}/mcp -H 'Content-Type: application/json' \\",
+        addr
+    );
+    eprintln!(
+        "    -d '{{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/call\",\"params\":{{\"name\":\"echo\",\"arguments\":{{\"message\":\"hello\"}}}}}}'"
+    );
     eprintln!();
 
     let http_server = TinyServer::http(addr).expect("Failed to start HTTP server");
-    
+
     // Shared context across requests
     let shared_context = AppContext::new();
 
@@ -116,7 +157,7 @@ fn main() {
     for mut request in http_server.incoming_requests() {
         let path = request.url().to_string();
         let method = request.method().clone();
-        
+
         eprintln!("{} {}", method, path);
 
         if path != "/mcp" {
@@ -162,18 +203,18 @@ fn main() {
 
         // Create transport wrapped in Arc<Mutex> so we can get it back
         let transport = Arc::new(Mutex::new(HttpTransport::new(body)));
-        
+
         if let Err(e) = server.process_one(transport.clone(), &mut ctx) {
             eprintln!("  Error: {}", e);
-            let response = Response::from_string(format!("Internal Error: {}", e))
-                .with_status_code(500);
+            let response =
+                Response::from_string(format!("Internal Error: {}", e)).with_status_code(500);
             let _ = request.respond(response);
             continue;
         }
 
         // Extract response from transport
         let mut transport_guard = transport.lock().unwrap();
-        
+
         let (response_body, content_type) = if transport_guard.has_notifications() {
             // SSE format for tool calls with notifications
             let sse = transport_guard.take_sse_response();
@@ -181,14 +222,16 @@ fn main() {
             (sse, "text/event-stream")
         } else {
             // Plain JSON for simple requests
-            let json = transport_guard.take_response().unwrap_or_else(|| "{}".to_string());
+            let json = transport_guard
+                .take_response()
+                .unwrap_or_else(|| "{}".to_string());
             eprintln!("  Response (JSON): {}", json);
             (json, "application/json")
         };
 
         let content_type_header = Header::from_bytes("Content-Type", content_type).unwrap();
         let response = Response::from_string(response_body).with_header(content_type_header);
-        
+
         if let Err(e) = request.respond(response) {
             eprintln!("  Failed to send response: {}", e);
         }

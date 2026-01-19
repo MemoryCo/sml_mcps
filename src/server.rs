@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 //
 
 /// Environment provided to tools during execution
-/// 
+///
 /// Gives tools access to notifications, progress reporting, and resources.
 pub struct ToolEnv<'a> {
     transport: &'a Arc<Mutex<dyn Transport>>,
@@ -24,17 +24,22 @@ impl<'a> ToolEnv<'a> {
     /// Send a notification to the client
     pub fn send_notification(&self, method: &str, params: Option<Value>) -> Result<()> {
         let notification = JsonRpcMessage::notification(method, params);
-        let mut transport = self.transport.lock()
+        let mut transport = self
+            .transport
+            .lock()
             .map_err(|_| McpError::Internal("Transport lock poisoned".into()))?;
         transport.write(&notification)
     }
 
     /// Send a log message notification
     pub fn log(&self, level: LogLevel, message: impl Into<String>) -> Result<()> {
-        self.send_notification("notifications/message", Some(serde_json::json!({
-            "level": level.as_str(),
-            "data": message.into()
-        })))
+        self.send_notification(
+            "notifications/message",
+            Some(serde_json::json!({
+                "level": level.as_str(),
+                "data": message.into()
+            })),
+        )
     }
 
     /// Send progress update for long-running operations
@@ -85,25 +90,20 @@ impl LogLevel {
 //
 
 /// Tool implementation trait
-/// 
+///
 /// Generic over context type `C` for shared state between tools.
 pub trait Tool<C>: Send + Sync {
     /// Tool name (must be unique)
     fn name(&self) -> &str;
-    
+
     /// Human-readable description
     fn description(&self) -> &str;
-    
+
     /// JSON Schema for input arguments
     fn schema(&self) -> Value;
-    
+
     /// Execute the tool
-    fn execute(
-        &self,
-        args: Value,
-        context: &mut C,
-        env: &ToolEnv,
-    ) -> Result<CallToolResult>;
+    fn execute(&self, args: Value, context: &mut C, env: &ToolEnv) -> Result<CallToolResult>;
 }
 
 //
@@ -114,19 +114,19 @@ pub trait Tool<C>: Send + Sync {
 pub trait Resource: Send + Sync {
     /// Resource URI (must be unique)
     fn uri(&self) -> String;
-    
+
     /// Human-readable name
     fn name(&self) -> String;
-    
+
     /// Description
     fn description(&self) -> String;
-    
+
     /// MIME type
     fn mime_type(&self) -> String;
-    
+
     /// Get resource content
     fn content(&self) -> Vec<ResourceContent>;
-    
+
     /// Convert to protocol Resource type
     fn as_protocol_resource(&self) -> crate::types::Resource {
         crate::types::Resource {
@@ -139,26 +139,23 @@ pub trait Resource: Send + Sync {
 }
 
 //
-// Prompt trait  
+// Prompt trait
 //
 
 /// Prompt implementation trait
 pub trait PromptDef: Send + Sync {
     /// Prompt name (must be unique)
     fn name(&self) -> &str;
-    
+
     /// Human-readable description
     fn description(&self) -> Option<&str>;
-    
+
     /// Argument definitions
     fn arguments(&self) -> Vec<PromptArgument>;
-    
+
     /// Generate prompt messages
-    fn get_messages(
-        &self,
-        args: &HashMap<String, String>,
-    ) -> Result<Vec<PromptMessage>>;
-    
+    fn get_messages(&self, args: &HashMap<String, String>) -> Result<Vec<PromptMessage>>;
+
     /// Convert to protocol Prompt type
     fn as_protocol_prompt(&self) -> Prompt {
         Prompt {
@@ -253,12 +250,16 @@ impl<C: Send + Sync + 'static> Server<C> {
         let transport: Arc<Mutex<dyn Transport>> = Arc::new(Mutex::new(transport));
         self.transport = Some(transport.clone());
 
-        eprintln!("MCP Server `{}` started, version {}", self.config.name, self.config.version);
+        eprintln!(
+            "MCP Server `{}` started, version {}",
+            self.config.name, self.config.version
+        );
 
         loop {
             // Read message
             let message = {
-                let mut t = transport.lock()
+                let mut t = transport
+                    .lock()
                     .map_err(|_| McpError::Internal("Transport lock poisoned".into()))?;
                 match t.read() {
                     Ok(msg) => msg,
@@ -269,7 +270,8 @@ impl<C: Send + Sync + 'static> Server<C> {
 
             // Handle message
             if let Some(response) = self.handle_message(message, &mut context)? {
-                let mut t = transport.lock()
+                let mut t = transport
+                    .lock()
                     .map_err(|_| McpError::Internal("Transport lock poisoned".into()))?;
                 t.write(&response)?;
             }
@@ -279,11 +281,11 @@ impl<C: Send + Sync + 'static> Server<C> {
     }
 
     /// Process a single request (for HTTP - single request/response)
-    /// 
+    ///
     /// Pass an Arc<Mutex<T>> so that:
     /// 1. ToolEnv can write notifications to the transport during execution
     /// 2. You can extract buffered messages after processing
-    /// 
+    ///
     /// For HttpTransport, use `transport.take_sse_response()` after this call.
     pub fn process_one<T: Transport + 'static>(
         &mut self,
@@ -292,26 +294,32 @@ impl<C: Send + Sync + 'static> Server<C> {
     ) -> Result<()> {
         // Store as dyn Transport for ToolEnv
         self.transport = Some(transport.clone() as Arc<Mutex<dyn Transport>>);
-        
+
         // Read message
         let message = {
-            let mut t = transport.lock()
+            let mut t = transport
+                .lock()
                 .map_err(|_| McpError::Internal("Transport lock poisoned".into()))?;
             t.read()?
         };
-        
+
         // Handle and write response
         if let Some(response) = self.handle_message(message, context)? {
-            let mut t = transport.lock()
+            let mut t = transport
+                .lock()
                 .map_err(|_| McpError::Internal("Transport lock poisoned".into()))?;
             t.write(&response)?;
         }
-        
+
         Ok(())
     }
 
     /// Handle a single message
-    fn handle_message(&mut self, message: JsonRpcMessage, context: &mut C) -> Result<Option<JsonRpcMessage>> {
+    fn handle_message(
+        &mut self,
+        message: JsonRpcMessage,
+        context: &mut C,
+    ) -> Result<Option<JsonRpcMessage>> {
         match message {
             JsonRpcMessage::Request(request) => {
                 let response = self.handle_request(request, context);
@@ -328,7 +336,7 @@ impl<C: Send + Sync + 'static> Server<C> {
     /// Handle a request and return a response
     fn handle_request(&mut self, request: JsonRpcRequest, context: &mut C) -> JsonRpcMessage {
         let id = request.id.clone();
-        
+
         match self.dispatch_request(&request, context) {
             Ok(result) => JsonRpcMessage::response(id, result),
             Err(e) => JsonRpcMessage::error(id, e.to_jsonrpc_error()),
@@ -361,9 +369,21 @@ impl<C: Send + Sync + 'static> Server<C> {
         let result = InitializeResult {
             protocol_version: PROTOCOL_VERSION.to_string(),
             capabilities: ServerCapabilities {
-                tools: if self.tools.is_empty() { None } else { Some(ToolsCapability::default()) },
-                resources: if self.resources.is_empty() { None } else { Some(ResourcesCapability::default()) },
-                prompts: if self.prompts.is_empty() { None } else { Some(PromptsCapability::default()) },
+                tools: if self.tools.is_empty() {
+                    None
+                } else {
+                    Some(ToolsCapability::default())
+                },
+                resources: if self.resources.is_empty() {
+                    None
+                } else {
+                    Some(ResourcesCapability::default())
+                },
+                prompts: if self.prompts.is_empty() {
+                    None
+                } else {
+                    Some(PromptsCapability::default())
+                },
                 logging: None,
                 experimental: None,
             },
@@ -382,7 +402,9 @@ impl<C: Send + Sync + 'static> Server<C> {
     }
 
     fn handle_list_tools(&self) -> Result<Value> {
-        let tools: Vec<crate::types::Tool> = self.tools.values()
+        let tools: Vec<crate::types::Tool> = self
+            .tools
+            .values()
             .map(|t| crate::types::Tool {
                 name: t.name().to_string(),
                 description: Some(t.description().to_string()),
@@ -390,7 +412,10 @@ impl<C: Send + Sync + 'static> Server<C> {
             })
             .collect();
 
-        Ok(serde_json::to_value(ListToolsResult { tools, next_cursor: None })?)
+        Ok(serde_json::to_value(ListToolsResult {
+            tools,
+            next_cursor: None,
+        })?)
     }
 
     fn handle_call_tool(&mut self, request: &JsonRpcRequest, context: &mut C) -> Result<Value> {
@@ -399,7 +424,9 @@ impl<C: Send + Sync + 'static> Server<C> {
             None => return Err(McpError::InvalidParams("Missing params".into())),
         };
 
-        let tool = self.tools.get(&params.name)
+        let tool = self
+            .tools
+            .get(&params.name)
             .ok_or_else(|| McpError::ToolError(format!("Unknown tool: {}", params.name)))?;
 
         let env = ToolEnv {
@@ -417,11 +444,16 @@ impl<C: Send + Sync + 'static> Server<C> {
     }
 
     fn handle_list_resources(&self) -> Result<Value> {
-        let resources: Vec<crate::types::Resource> = self.resources.values()
+        let resources: Vec<crate::types::Resource> = self
+            .resources
+            .values()
             .map(|r| r.as_protocol_resource())
             .collect();
 
-        Ok(serde_json::to_value(ListResourcesResult { resources, next_cursor: None })?)
+        Ok(serde_json::to_value(ListResourcesResult {
+            resources,
+            next_cursor: None,
+        })?)
     }
 
     fn handle_read_resource(&self, request: &JsonRpcRequest) -> Result<Value> {
@@ -430,7 +462,9 @@ impl<C: Send + Sync + 'static> Server<C> {
             None => return Err(McpError::InvalidParams("Missing params".into())),
         };
 
-        let resource = self.resources.get(&params.uri)
+        let resource = self
+            .resources
+            .get(&params.uri)
             .ok_or_else(|| McpError::ResourceNotFound(params.uri.clone()))?;
 
         let contents = resource.content();
@@ -438,11 +472,16 @@ impl<C: Send + Sync + 'static> Server<C> {
     }
 
     fn handle_list_prompts(&self) -> Result<Value> {
-        let prompts: Vec<Prompt> = self.prompts.values()
+        let prompts: Vec<Prompt> = self
+            .prompts
+            .values()
             .map(|p| p.as_protocol_prompt())
             .collect();
 
-        Ok(serde_json::to_value(ListPromptsResult { prompts, next_cursor: None })?)
+        Ok(serde_json::to_value(ListPromptsResult {
+            prompts,
+            next_cursor: None,
+        })?)
     }
 
     fn handle_get_prompt(&self, request: &JsonRpcRequest) -> Result<Value> {
@@ -451,7 +490,9 @@ impl<C: Send + Sync + 'static> Server<C> {
             None => return Err(McpError::InvalidParams("Missing params".into())),
         };
 
-        let prompt = self.prompts.get(&params.name)
+        let prompt = self
+            .prompts
+            .get(&params.name)
             .ok_or_else(|| McpError::PromptNotFound(params.name.clone()))?;
 
         let messages = prompt.get_messages(&params.arguments)?;
@@ -486,8 +527,12 @@ mod tests {
     struct IncrementTool;
 
     impl Tool<TestContext> for IncrementTool {
-        fn name(&self) -> &str { "increment" }
-        fn description(&self) -> &str { "Increment the counter" }
+        fn name(&self) -> &str {
+            "increment"
+        }
+        fn description(&self) -> &str {
+            "Increment the counter"
+        }
         fn schema(&self) -> Value {
             serde_json::json!({
                 "type": "object",
@@ -496,10 +541,18 @@ mod tests {
                 }
             })
         }
-        fn execute(&self, args: Value, ctx: &mut TestContext, _env: &ToolEnv) -> Result<CallToolResult> {
+        fn execute(
+            &self,
+            args: Value,
+            ctx: &mut TestContext,
+            _env: &ToolEnv,
+        ) -> Result<CallToolResult> {
             let amount = args.get("amount").and_then(|a| a.as_i64()).unwrap_or(1) as i32;
             ctx.counter += amount;
-            Ok(CallToolResult::text(format!("Counter is now: {}", ctx.counter)))
+            Ok(CallToolResult::text(format!(
+                "Counter is now: {}",
+                ctx.counter
+            )))
         }
     }
 
@@ -507,10 +560,21 @@ mod tests {
     struct NotifyTool;
 
     impl Tool<TestContext> for NotifyTool {
-        fn name(&self) -> &str { "notify" }
-        fn description(&self) -> &str { "Send a notification" }
-        fn schema(&self) -> Value { serde_json::json!({"type": "object"}) }
-        fn execute(&self, _args: Value, _ctx: &mut TestContext, env: &ToolEnv) -> Result<CallToolResult> {
+        fn name(&self) -> &str {
+            "notify"
+        }
+        fn description(&self) -> &str {
+            "Send a notification"
+        }
+        fn schema(&self) -> Value {
+            serde_json::json!({"type": "object"})
+        }
+        fn execute(
+            &self,
+            _args: Value,
+            _ctx: &mut TestContext,
+            env: &ToolEnv,
+        ) -> Result<CallToolResult> {
             env.log(LogLevel::Info, "test notification")?;
             env.send_progress("token", 0.5, Some(1.0))?;
             Ok(CallToolResult::text("done"))
@@ -521,10 +585,21 @@ mod tests {
     struct FailingTool;
 
     impl Tool<TestContext> for FailingTool {
-        fn name(&self) -> &str { "fail" }
-        fn description(&self) -> &str { "Always fails" }
-        fn schema(&self) -> Value { serde_json::json!({"type": "object"}) }
-        fn execute(&self, _args: Value, _ctx: &mut TestContext, _env: &ToolEnv) -> Result<CallToolResult> {
+        fn name(&self) -> &str {
+            "fail"
+        }
+        fn description(&self) -> &str {
+            "Always fails"
+        }
+        fn schema(&self) -> Value {
+            serde_json::json!({"type": "object"})
+        }
+        fn execute(
+            &self,
+            _args: Value,
+            _ctx: &mut TestContext,
+            _env: &ToolEnv,
+        ) -> Result<CallToolResult> {
             Err(McpError::ToolError("intentional failure".into()))
         }
     }
@@ -536,10 +611,18 @@ mod tests {
     }
 
     impl Resource for TestResource {
-        fn uri(&self) -> String { self.uri.clone() }
-        fn name(&self) -> String { "test-resource".into() }
-        fn description(&self) -> String { "A test resource".into() }
-        fn mime_type(&self) -> String { "text/plain".into() }
+        fn uri(&self) -> String {
+            self.uri.clone()
+        }
+        fn name(&self) -> String {
+            "test-resource".into()
+        }
+        fn description(&self) -> String {
+            "A test resource".into()
+        }
+        fn mime_type(&self) -> String {
+            "text/plain".into()
+        }
         fn content(&self) -> Vec<ResourceContent> {
             vec![ResourceContent::Text {
                 uri: self.uri.clone(),
@@ -553,8 +636,12 @@ mod tests {
     struct TestPrompt;
 
     impl PromptDef for TestPrompt {
-        fn name(&self) -> &str { "test-prompt" }
-        fn description(&self) -> Option<&str> { Some("A test prompt") }
+        fn name(&self) -> &str {
+            "test-prompt"
+        }
+        fn description(&self) -> Option<&str> {
+            Some("A test prompt")
+        }
         fn arguments(&self) -> Vec<PromptArgument> {
             vec![PromptArgument {
                 name: "name".into(),
@@ -580,7 +667,11 @@ mod tests {
 
     impl MockTransport {
         fn new(messages: Vec<JsonRpcMessage>) -> Self {
-            Self { messages, responses: Vec::new(), read_index: 0 }
+            Self {
+                messages,
+                responses: Vec::new(),
+                read_index: 0,
+            }
         }
 
         fn get_responses(&self) -> &[JsonRpcMessage] {
@@ -603,7 +694,9 @@ mod tests {
             Ok(())
         }
 
-        fn close(&mut self) -> Result<()> { Ok(()) }
+        fn close(&mut self) -> Result<()> {
+            Ok(())
+        }
     }
 
     // Helper to create a request message
@@ -643,7 +736,10 @@ mod tests {
     #[test]
     fn test_add_resource() {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
-        let resource = TestResource { uri: "test://data".into(), data: "hello".into() };
+        let resource = TestResource {
+            uri: "test://data".into(),
+            data: "hello".into(),
+        };
         server.add_resource(resource).unwrap();
         assert!(server.resources.contains_key("test://data"));
     }
@@ -651,8 +747,14 @@ mod tests {
     #[test]
     fn test_duplicate_resource_error() {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
-        let r1 = TestResource { uri: "test://data".into(), data: "hello".into() };
-        let r2 = TestResource { uri: "test://data".into(), data: "world".into() };
+        let r1 = TestResource {
+            uri: "test://data".into(),
+            data: "hello".into(),
+        };
+        let r2 = TestResource {
+            uri: "test://data".into(),
+            data: "world".into(),
+        };
         server.add_resource(r1).unwrap();
         let result = server.add_resource(r2);
         assert!(result.is_err());
@@ -711,7 +813,7 @@ mod tests {
         let mut ctx = TestContext { counter: 0 };
         let result = server.dispatch_request(&request, &mut ctx);
         assert!(result.is_ok());
-        
+
         let value = result.unwrap();
         assert_eq!(value["serverInfo"]["name"], "test-server");
         assert!(server.initialized);
@@ -758,7 +860,7 @@ mod tests {
         };
         let mut ctx = TestContext { counter: 0 };
         let result = server.dispatch_request(&request, &mut ctx).unwrap();
-        
+
         let tools = result["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["name"], "increment");
@@ -784,7 +886,7 @@ mod tests {
         };
         let mut ctx = TestContext { counter: 0 };
         let result = server.dispatch_request(&request, &mut ctx).unwrap();
-        
+
         assert_eq!(ctx.counter, 5);
         assert!(result["content"][0]["text"].as_str().unwrap().contains("5"));
     }
@@ -843,7 +945,12 @@ mod tests {
     #[test]
     fn test_handle_resources_list() {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
-        server.add_resource(TestResource { uri: "test://data".into(), data: "hello".into() }).unwrap();
+        server
+            .add_resource(TestResource {
+                uri: "test://data".into(),
+                data: "hello".into(),
+            })
+            .unwrap();
 
         let request = JsonRpcRequest {
             jsonrpc: Default::default(),
@@ -853,7 +960,7 @@ mod tests {
         };
         let mut ctx = TestContext { counter: 0 };
         let result = server.dispatch_request(&request, &mut ctx).unwrap();
-        
+
         let resources = result["resources"].as_array().unwrap();
         assert_eq!(resources.len(), 1);
         assert_eq!(resources[0]["uri"], "test://data");
@@ -862,7 +969,12 @@ mod tests {
     #[test]
     fn test_handle_resources_read() {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
-        server.add_resource(TestResource { uri: "test://data".into(), data: "hello world".into() }).unwrap();
+        server
+            .add_resource(TestResource {
+                uri: "test://data".into(),
+                data: "hello world".into(),
+            })
+            .unwrap();
 
         let request = JsonRpcRequest {
             jsonrpc: Default::default(),
@@ -872,7 +984,7 @@ mod tests {
         };
         let mut ctx = TestContext { counter: 0 };
         let result = server.dispatch_request(&request, &mut ctx).unwrap();
-        
+
         let contents = result["contents"].as_array().unwrap();
         assert_eq!(contents[0]["text"], "hello world");
     }
@@ -918,7 +1030,7 @@ mod tests {
         };
         let mut ctx = TestContext { counter: 0 };
         let result = server.dispatch_request(&request, &mut ctx).unwrap();
-        
+
         let prompts = result["prompts"].as_array().unwrap();
         assert_eq!(prompts.len(), 1);
         assert_eq!(prompts[0]["name"], "test-prompt");
@@ -940,10 +1052,15 @@ mod tests {
         };
         let mut ctx = TestContext { counter: 0 };
         let result = server.dispatch_request(&request, &mut ctx).unwrap();
-        
+
         let messages = result["messages"].as_array().unwrap();
         assert_eq!(messages.len(), 1);
-        assert!(messages[0]["content"]["text"].as_str().unwrap().contains("Claude"));
+        assert!(
+            messages[0]["content"]["text"]
+                .as_str()
+                .unwrap()
+                .contains("Claude")
+        );
     }
 
     #[test]
@@ -991,7 +1108,7 @@ mod tests {
     #[test]
     fn test_handle_notification() {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
-        
+
         let init_notification = JsonRpcNotification {
             jsonrpc: Default::default(),
             method: "notifications/initialized".to_string(),
@@ -1026,7 +1143,7 @@ mod tests {
         let message = make_request(1, "ping", None);
         let mut ctx = TestContext { counter: 0 };
         let result = server.handle_message(message, &mut ctx).unwrap();
-        
+
         assert!(result.is_some());
         if let Some(JsonRpcMessage::Response(resp)) = result {
             assert!(resp.result.is_some());
@@ -1069,7 +1186,7 @@ mod tests {
         };
         let mut ctx = TestContext { counter: 0 };
         let response = server.handle_request(request, &mut ctx);
-        
+
         if let JsonRpcMessage::Response(resp) = response {
             assert!(resp.error.is_some());
             assert_eq!(resp.id, RequestId::Number(99));
@@ -1083,20 +1200,22 @@ mod tests {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
         server.add_tool(IncrementTool).unwrap();
 
-        let messages = vec![
-            make_request(1, "tools/call", Some(serde_json::json!({
+        let messages = vec![make_request(
+            1,
+            "tools/call",
+            Some(serde_json::json!({
                 "name": "increment",
                 "arguments": { "amount": 10 }
-            }))),
-        ];
+            })),
+        )];
 
         let transport = Arc::new(Mutex::new(MockTransport::new(messages)));
         let mut ctx = TestContext { counter: 0 };
 
         server.process_one(transport.clone(), &mut ctx).unwrap();
-        
+
         assert_eq!(ctx.counter, 10);
-        
+
         let t = transport.lock().unwrap();
         let responses = t.get_responses();
         assert_eq!(responses.len(), 1);
@@ -1105,7 +1224,7 @@ mod tests {
     #[test]
     fn test_start_exits_on_transport_closed() {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
-        
+
         // Empty transport will return TransportClosed immediately
         let transport = MockTransport::new(vec![]);
         let ctx = TestContext { counter: 0 };
@@ -1120,15 +1239,23 @@ mod tests {
         server.add_tool(IncrementTool).unwrap();
 
         let messages = vec![
-            make_request(1, "initialize", Some(serde_json::json!({
-                "protocolVersion": "2025-03-26",
-                "capabilities": {},
-                "clientInfo": { "name": "test", "version": "1.0" }
-            }))),
-            make_request(2, "tools/call", Some(serde_json::json!({
-                "name": "increment",
-                "arguments": { "amount": 7 }
-            }))),
+            make_request(
+                1,
+                "initialize",
+                Some(serde_json::json!({
+                    "protocolVersion": "2025-03-26",
+                    "capabilities": {},
+                    "clientInfo": { "name": "test", "version": "1.0" }
+                })),
+            ),
+            make_request(
+                2,
+                "tools/call",
+                Some(serde_json::json!({
+                    "name": "increment",
+                    "arguments": { "amount": 7 }
+                })),
+            ),
         ];
 
         let transport = MockTransport::new(messages);
@@ -1142,11 +1269,26 @@ mod tests {
     #[test]
     fn test_tool_env_list_resources() {
         let mut resources: HashMap<String, Box<dyn Resource>> = HashMap::new();
-        resources.insert("test://a".into(), Box::new(TestResource { uri: "test://a".into(), data: "a".into() }));
-        resources.insert("test://b".into(), Box::new(TestResource { uri: "test://b".into(), data: "b".into() }));
+        resources.insert(
+            "test://a".into(),
+            Box::new(TestResource {
+                uri: "test://a".into(),
+                data: "a".into(),
+            }),
+        );
+        resources.insert(
+            "test://b".into(),
+            Box::new(TestResource {
+                uri: "test://b".into(),
+                data: "b".into(),
+            }),
+        );
 
         let transport: Arc<Mutex<dyn Transport>> = Arc::new(Mutex::new(MockTransport::new(vec![])));
-        let env = ToolEnv { transport: &transport, resources: &resources };
+        let env = ToolEnv {
+            transport: &transport,
+            resources: &resources,
+        };
 
         let uris = env.list_resources();
         assert_eq!(uris.len(), 2);
@@ -1157,10 +1299,19 @@ mod tests {
     #[test]
     fn test_tool_env_get_resource() {
         let mut resources: HashMap<String, Box<dyn Resource>> = HashMap::new();
-        resources.insert("test://data".into(), Box::new(TestResource { uri: "test://data".into(), data: "hello".into() }));
+        resources.insert(
+            "test://data".into(),
+            Box::new(TestResource {
+                uri: "test://data".into(),
+                data: "hello".into(),
+            }),
+        );
 
         let transport: Arc<Mutex<dyn Transport>> = Arc::new(Mutex::new(MockTransport::new(vec![])));
-        let env = ToolEnv { transport: &transport, resources: &resources };
+        let env = ToolEnv {
+            transport: &transport,
+            resources: &resources,
+        };
 
         let found = env.get_resource("test://data");
         assert!(found.is_some());
@@ -1175,15 +1326,17 @@ mod tests {
         let mut server: Server<TestContext> = Server::new(ServerConfig::default());
         server.add_tool(NotifyTool).unwrap();
 
-        let messages = vec![
-            make_request(1, "tools/call", Some(serde_json::json!({ "name": "notify" }))),
-        ];
+        let messages = vec![make_request(
+            1,
+            "tools/call",
+            Some(serde_json::json!({ "name": "notify" })),
+        )];
 
         let transport = Arc::new(Mutex::new(MockTransport::new(messages)));
         let mut ctx = TestContext { counter: 0 };
 
         server.process_one(transport.clone(), &mut ctx).unwrap();
-        
+
         let t = transport.lock().unwrap();
         let responses = t.get_responses();
         // Should have: notification, progress, response
@@ -1192,9 +1345,12 @@ mod tests {
 
     #[test]
     fn test_resource_as_protocol_resource() {
-        let resource = TestResource { uri: "test://uri".into(), data: "data".into() };
+        let resource = TestResource {
+            uri: "test://uri".into(),
+            data: "data".into(),
+        };
         let proto = resource.as_protocol_resource();
-        
+
         assert_eq!(proto.uri, "test://uri");
         assert_eq!(proto.name, "test-resource");
         assert_eq!(proto.description, Some("A test resource".into()));
@@ -1205,7 +1361,7 @@ mod tests {
     fn test_prompt_as_protocol_prompt() {
         let prompt = TestPrompt;
         let proto = prompt.as_protocol_prompt();
-        
+
         assert_eq!(proto.name, "test-prompt");
         assert_eq!(proto.description, Some("A test prompt".into()));
         assert_eq!(proto.arguments.len(), 1);
@@ -1231,9 +1387,14 @@ mod tests {
         // Server with everything
         let mut full_server: Server<TestContext> = Server::new(ServerConfig::default());
         full_server.add_tool(IncrementTool).unwrap();
-        full_server.add_resource(TestResource { uri: "test://x".into(), data: "x".into() }).unwrap();
+        full_server
+            .add_resource(TestResource {
+                uri: "test://x".into(),
+                data: "x".into(),
+            })
+            .unwrap();
         full_server.add_prompt(TestPrompt).unwrap();
-        
+
         let result = full_server.dispatch_request(&req, &mut ctx).unwrap();
         assert!(!result["capabilities"]["tools"].is_null());
         assert!(!result["capabilities"]["resources"].is_null());

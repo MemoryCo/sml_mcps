@@ -44,7 +44,7 @@ impl std::fmt::Display for RequestId {
 }
 
 /// A JSON-RPC message - request, response, or notification
-/// 
+///
 /// Note: Order matters for serde untagged deserialization.
 /// Request comes first (has method + id), then Notification (has method, no id),
 /// then Response (has id, no method).
@@ -58,7 +58,11 @@ pub enum JsonRpcMessage {
 
 impl JsonRpcMessage {
     /// Create a request message
-    pub fn request(id: impl Into<RequestId>, method: impl Into<String>, params: Option<Value>) -> Self {
+    pub fn request(
+        id: impl Into<RequestId>,
+        method: impl Into<String>,
+        params: Option<Value>,
+    ) -> Self {
         JsonRpcMessage::Request(JsonRpcRequest {
             id: id.into(),
             method: method.into(),

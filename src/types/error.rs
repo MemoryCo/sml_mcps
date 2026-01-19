@@ -81,7 +81,8 @@ mod tests {
 
     #[test]
     fn test_json_error_conversion() {
-        let json_err: serde_json::Error = serde_json::from_str::<String>("not valid json").unwrap_err();
+        let json_err: serde_json::Error =
+            serde_json::from_str::<String>("not valid json").unwrap_err();
         let mcp_err = McpError::from(json_err);
         assert!(matches!(mcp_err, McpError::Json(_)));
         assert!(mcp_err.to_string().contains("JSON error"));

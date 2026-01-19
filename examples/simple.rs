@@ -4,11 +4,10 @@
 //!
 //! Run with: cargo run --example simple
 
-use sml_mcps::{
-    Server, ServerConfig, StdioTransport,
-    Tool, ToolEnv, CallToolResult, Result, McpError, LogLevel,
-};
 use serde_json::Value;
+use sml_mcps::{
+    CallToolResult, LogLevel, McpError, Result, Server, ServerConfig, StdioTransport, Tool, ToolEnv,
+};
 
 /// Shared context between tools
 struct AppContext {
@@ -51,15 +50,19 @@ impl Tool<AppContext> for EchoTool {
     }
 
     fn execute(&self, args: Value, ctx: &mut AppContext, env: &ToolEnv) -> Result<CallToolResult> {
-        let message = args.get("message")
+        let message = args
+            .get("message")
             .and_then(|v| v.as_str())
             .ok_or_else(|| McpError::InvalidParams("Missing 'message' parameter".into()))?;
-        
+
         ctx.echo_count += 1;
-        
+
         // Log to client
-        env.log(LogLevel::Info, format!("Echo #{}: {}", ctx.echo_count, message))?;
-        
+        env.log(
+            LogLevel::Info,
+            format!("Echo #{}: {}", ctx.echo_count, message),
+        )?;
+
         Ok(CallToolResult::text(format!("Echo: {}", message)))
     }
 }
@@ -68,13 +71,25 @@ impl Tool<AppContext> for EchoTool {
 struct CounterGetTool;
 
 impl Tool<AppContext> for CounterGetTool {
-    fn name(&self) -> &str { "counter_get" }
-    fn description(&self) -> &str { "Get the current counter value" }
+    fn name(&self) -> &str {
+        "counter_get"
+    }
+    fn description(&self) -> &str {
+        "Get the current counter value"
+    }
     fn schema(&self) -> Value {
         serde_json::json!({ "type": "object", "properties": {} })
     }
-    fn execute(&self, _args: Value, ctx: &mut AppContext, _env: &ToolEnv) -> Result<CallToolResult> {
-        Ok(CallToolResult::text(format!("Counter value: {}", ctx.counter)))
+    fn execute(
+        &self,
+        _args: Value,
+        ctx: &mut AppContext,
+        _env: &ToolEnv,
+    ) -> Result<CallToolResult> {
+        Ok(CallToolResult::text(format!(
+            "Counter value: {}",
+            ctx.counter
+        )))
     }
 }
 
@@ -82,8 +97,12 @@ impl Tool<AppContext> for CounterGetTool {
 struct CounterIncrementTool;
 
 impl Tool<AppContext> for CounterIncrementTool {
-    fn name(&self) -> &str { "counter_increment" }
-    fn description(&self) -> &str { "Increment the counter and return the new value" }
+    fn name(&self) -> &str {
+        "counter_increment"
+    }
+    fn description(&self) -> &str {
+        "Increment the counter and return the new value"
+    }
     fn schema(&self) -> Value {
         serde_json::json!({
             "type": "object",
@@ -98,10 +117,16 @@ impl Tool<AppContext> for CounterIncrementTool {
     fn execute(&self, args: Value, ctx: &mut AppContext, env: &ToolEnv) -> Result<CallToolResult> {
         let amount = args.get("amount").and_then(|a| a.as_i64()).unwrap_or(1);
         ctx.counter += amount;
-        
-        env.log(LogLevel::Debug, format!("Counter incremented by {} to {}", amount, ctx.counter))?;
-        
-        Ok(CallToolResult::text(format!("Counter incremented to: {}", ctx.counter)))
+
+        env.log(
+            LogLevel::Debug,
+            format!("Counter incremented by {} to {}", amount, ctx.counter),
+        )?;
+
+        Ok(CallToolResult::text(format!(
+            "Counter incremented to: {}",
+            ctx.counter
+        )))
     }
 }
 
@@ -109,15 +134,27 @@ impl Tool<AppContext> for CounterIncrementTool {
 struct CounterResetTool;
 
 impl Tool<AppContext> for CounterResetTool {
-    fn name(&self) -> &str { "counter_reset" }
-    fn description(&self) -> &str { "Reset the counter to zero" }
+    fn name(&self) -> &str {
+        "counter_reset"
+    }
+    fn description(&self) -> &str {
+        "Reset the counter to zero"
+    }
     fn schema(&self) -> Value {
         serde_json::json!({ "type": "object", "properties": {} })
     }
-    fn execute(&self, _args: Value, ctx: &mut AppContext, _env: &ToolEnv) -> Result<CallToolResult> {
+    fn execute(
+        &self,
+        _args: Value,
+        ctx: &mut AppContext,
+        _env: &ToolEnv,
+    ) -> Result<CallToolResult> {
         let old_value = ctx.counter;
         ctx.counter = 0;
-        Ok(CallToolResult::text(format!("Counter reset from {} to 0", old_value)))
+        Ok(CallToolResult::text(format!(
+            "Counter reset from {} to 0",
+            old_value
+        )))
     }
 }
 
@@ -135,7 +172,7 @@ fn main() -> Result<()> {
     };
 
     let mut server = Server::new(config);
-    
+
     // Add tools
     server.add_tool(EchoTool)?;
     server.add_tool(CounterGetTool)?;
@@ -145,10 +182,10 @@ fn main() -> Result<()> {
     // Create context and start
     let context = AppContext::new();
     let transport = StdioTransport::new();
-    
+
     eprintln!("Server ready, waiting for messages...");
     server.start(transport, context)?;
-    
+
     eprintln!("Server shutting down.");
     Ok(())
 }

@@ -31,11 +31,11 @@ impl Transport for StdioTransport {
     fn read(&mut self) -> Result<JsonRpcMessage> {
         let mut line = String::new();
         self.stdin.lock().read_line(&mut line)?;
-        
+
         if line.is_empty() {
             return Err(crate::types::McpError::TransportClosed);
         }
-        
+
         let message: JsonRpcMessage = serde_json::from_str(&line)?;
         Ok(message)
     }
@@ -70,16 +70,14 @@ mod tests {
 
     #[test]
     fn test_stdio_transport_new() {
-        let transport = StdioTransport::new();
+        let _transport = StdioTransport::new();
         // Just verify it creates without panic
-        drop(transport);
     }
 
     #[test]
     fn test_stdio_transport_default() {
-        let transport = StdioTransport::default();
+        let _transport = StdioTransport::default();
         // Verify Default trait works
-        drop(transport);
     }
 
     #[test]

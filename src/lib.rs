@@ -9,17 +9,17 @@
 //! - `auth` - JWT validation for hosted deployments
 //! - `hosted` - Enables both `http` and `auth`
 
-pub mod types;
-pub mod transport;
 pub mod server;
+pub mod transport;
+pub mod types;
 
 #[cfg(feature = "auth")]
 pub mod auth;
 
 // Re-export commonly used types
+pub use server::{LogLevel, PromptDef, Resource, Server, ServerConfig, Tool, ToolEnv};
+pub use transport::{StdioTransport, Transport};
 pub use types::*;
-pub use transport::{Transport, StdioTransport};
-pub use server::{Server, ServerConfig, Tool, Resource, PromptDef, ToolEnv, LogLevel};
 
 #[cfg(feature = "http")]
 pub use transport::HttpTransport;

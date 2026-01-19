@@ -18,10 +18,10 @@ use crate::types::{JsonRpcMessage, Result};
 pub trait Transport: Send + Sync {
     /// Read a single message from the transport
     fn read(&mut self) -> Result<JsonRpcMessage>;
-    
+
     /// Write a single message to the transport
     fn write(&mut self, message: &JsonRpcMessage) -> Result<()>;
-    
+
     /// Close the transport
     fn close(&mut self) -> Result<()>;
 }
