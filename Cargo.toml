@@ -1,13 +1,13 @@
 [package]
 name = "sml_mcps"
 version = "0.1.0"
-edition = "2021"
-rust-version = "1.70"
+edition = "2024"
+rust-version = "1.85"
 description = "Small MCP Server - sync, no tokio, just works"
 license = "MIT"
 repository = "https://github.com/MemoryCo/sml_mcps"
 readme = "README.md"
-keywords = ["mcp", "model-context-protocol", "server", "sync", "claude"]
+keywords = ["mcp", "server", "sync", "claude", "anthropic"]
 categories = ["network-programming", "api-bindings"]
 
 [dependencies]
