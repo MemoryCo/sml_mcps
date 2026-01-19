@@ -1,5 +1,9 @@
 # sml_mcps
 
+[![CI](https://github.com/pebblebed-tech/sml_mcps/actions/workflows/ci.yml/badge.svg)](https://github.com/pebblebed-tech/sml_mcps/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/pebblebed-tech/sml_mcps/graph/badge.svg)](https://codecov.io/gh/pebblebed-tech/sml_mcps)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Small MCP Server** - A minimal, sync MCP server implementation. No tokio, no async, just works.
 
 ## Why?
