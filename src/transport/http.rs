@@ -60,10 +60,7 @@ impl HttpTransport {
 
 impl Transport for HttpTransport {
     fn read(&mut self) -> Result<JsonRpcMessage> {
-        let body = self
-            .request
-            .take()
-            .ok_or(McpError::TransportClosed)?;
+        let body = self.request.take().ok_or(McpError::TransportClosed)?;
 
         let message: JsonRpcMessage = serde_json::from_str(&body)?;
         Ok(message)
