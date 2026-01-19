@@ -1,0 +1,40 @@
+[package]
+name = "sml_mcps"
+version = "0.1.0"
+edition = "2024"
+description = "Small MCP Server - sync, no tokio, just works"
+license = "MIT"
+
+[dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2"
+
+# JSON Schema generation for tools
+schemars = { version = "1.0", optional = true }
+
+# JWT validation for hosted auth
+jsonwebtoken = { version = "9", optional = true }
+
+# HTTP server (tiny, sync, no deps)
+tiny_http = { version = "0.12", optional = true }
+
+[features]
+default = ["schema"]
+schema = ["dep:schemars"]
+http = ["dep:tiny_http"]
+auth = ["dep:jsonwebtoken"]
+hosted = ["http", "auth"]
+
+[dev-dependencies]
+
+[[example]]
+name = "simple"
+
+[[example]]
+name = "http_server"
+required-features = ["http"]
+
+[[example]]
+name = "http_auth"
+required-features = ["hosted"]
