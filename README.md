@@ -13,7 +13,8 @@ The official `rmcp` SDK is async/tokio-based. That's fine for some use cases, bu
 1. **Tokio is viral** - once you're async, everything wants to be async
 2. **MCP is sequential** - request → response → request → response  
 3. **53% test coverage** - rmcp is young and under-tested
-4. **We want control** - our core crates are sync
+4. **Apache 2 licensed** - rmcp switched from MIT; we prefer MIT
+5. **We want control** - our core crates are sync
 
 sml_mcps gives us a clean, sync MCP server that we control.
 
