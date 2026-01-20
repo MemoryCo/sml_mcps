@@ -8,8 +8,8 @@ use serde_json::Value;
 use sml_mcps::{
     CallToolResult, HttpServer, LogLevel, McpError, Result, ServerConfig, Tool, ToolEnv,
 };
-use std::sync::atomic::{AtomicI64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 /// Shared context - thread-safe for HTTP
 struct AppContext {

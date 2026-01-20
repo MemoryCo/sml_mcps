@@ -91,6 +91,9 @@ use tiny_http::{Header, Method, Response, Server as TinyServer};
 #[cfg(feature = "auth")]
 use crate::auth::{Claims, JwtValidator};
 
+/// Setup function type for configuring tools on each request
+type SetupFn<C> = Box<dyn Fn(&mut Server<C>) -> Result<()> + Send + Sync>;
+
 /// High-level HTTP MCP server
 ///
 /// Wraps the request loop boilerplate for serving MCP over HTTP.
@@ -125,7 +128,7 @@ use crate::auth::{Claims, JwtValidator};
 pub struct HttpServer<C> {
     config: ServerConfig,
     endpoint: String,
-    setup: Option<Box<dyn Fn(&mut Server<C>) -> Result<()> + Send + Sync>>,
+    setup: Option<SetupFn<C>>,
 }
 
 impl<C: Send + Sync + 'static> HttpServer<C> {
@@ -360,7 +363,9 @@ impl<C: Send + Sync + 'static> HttpServer<C> {
             Ok((transport_guard.take_sse_response(), "text/event-stream"))
         } else {
             Ok((
-                transport_guard.take_response().unwrap_or_else(|| "{}".to_string()),
+                transport_guard
+                    .take_response()
+                    .unwrap_or_else(|| "{}".to_string()),
                 "application/json",
             ))
         }
@@ -559,11 +564,7 @@ mod http_server_tests {
             .unwrap_or_default();
 
         // Parse body (after empty line)
-        let body = response
-            .split("\r\n\r\n")
-            .nth(1)
-            .unwrap_or("")
-            .to_string();
+        let body = response.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
 
         Ok((status_code, content_type, body))
     }
@@ -845,7 +846,7 @@ mod http_server_tests {
     mod auth_tests {
         use super::*;
         use crate::auth::JwtValidator;
-        use jsonwebtoken::{encode, Algorithm, EncodingKey, Header as JwtHeader};
+        use jsonwebtoken::{Algorithm, EncodingKey, Header as JwtHeader, encode};
         use serde::Serialize;
 
         const SECRET: &[u8] = b"test-secret-key";
@@ -948,11 +949,7 @@ mod http_server_tests {
                 .map(|l| l.split(':').nth(1).unwrap_or("").trim().to_string())
                 .unwrap_or_default();
 
-            let body = response
-                .split("\r\n\r\n")
-                .nth(1)
-                .unwrap_or("")
-                .to_string();
+            let body = response.split("\r\n\r\n").nth(1).unwrap_or("").to_string();
 
             Ok((status_code, content_type, body))
         }

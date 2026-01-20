@@ -4,11 +4,11 @@
 
 use serde_json::Value;
 use sml_mcps::{
-    auth::JwtValidator, CallToolResult, HttpServer, LogLevel, Result, ServerConfig, Tool, ToolEnv,
+    CallToolResult, HttpServer, LogLevel, Result, ServerConfig, Tool, ToolEnv, auth::JwtValidator,
 };
 
 // For demo: generate test tokens
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header as JwtHeader};
+use jsonwebtoken::{Algorithm, EncodingKey, Header as JwtHeader, encode};
 use serde::Serialize;
 
 const SECRET: &[u8] = b"super-secret-key-for-testing-only";
