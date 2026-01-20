@@ -4,14 +4,14 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version bump type'
+        description: 'Version bump type (BREAKING.FEATURE.FIX)'
         required: true
-        default: 'patch'
+        default: 'fix'
         type: choice
         options:
-          - patch
-          - minor
-          - major
+          - fix
+          - feature
+          - breaking
 
 env:
   CARGO_TERM_COLOR: always
@@ -39,10 +39,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Map version type to semver
+        id: map
+        run: |
+          # Map our naming to cargo-edit's expected values
+          # BREAKING.FEATURE.FIX -> major.minor.patch
+          case "${{ github.event.inputs.version }}" in
+            breaking) echo "bump=major" >> $GITHUB_OUTPUT ;;
+            feature)  echo "bump=minor" >> $GITHUB_OUTPUT ;;
+            fix)      echo "bump=patch" >> $GITHUB_OUTPUT ;;
+          esac
+
       - name: Bump version
         id: bump
         run: |
-          cargo set-version --bump ${{ github.event.inputs.version }}
+          cargo set-version --bump ${{ steps.map.outputs.bump }}
           VERSION=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
@@ -58,7 +69,7 @@ jobs:
           
           echo "## v${{ steps.bump.outputs.version }}" > /tmp/notes.md
           echo "" >> /tmp/notes.md
-          echo "### Changes" >> /tmp/notes.md
+          echo "### Changes (${{ github.event.inputs.version }})" >> /tmp/notes.md
           echo "" >> /tmp/notes.md
           echo "$COMMITS" >> /tmp/notes.md
           
