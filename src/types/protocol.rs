@@ -127,12 +127,12 @@ pub struct ToolAnnotations {
     /// If true, the tool only reads data and never modifies anything
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub read_only_hint: bool,
-    
+
     /// If true, calling multiple times with same args has same effect as once
     /// Only meaningful when read_only_hint is false
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub idempotent_hint: bool,
-    
+
     /// If true, tool may overwrite or heavily mutate data
     /// Only meaningful when read_only_hint is false
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]

@@ -578,6 +578,7 @@ mod http_server_tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: None,
+            ..Default::default()
         };
 
         let server_addr = addr.clone();
@@ -616,6 +617,7 @@ mod http_server_tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: None,
+            ..Default::default()
         };
 
         let server_addr = addr.clone();
@@ -653,6 +655,7 @@ mod http_server_tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: None,
+            ..Default::default()
         };
 
         let server_addr = addr.clone();
@@ -692,6 +695,7 @@ mod http_server_tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: None,
+            ..Default::default()
         };
 
         let server_addr = addr.clone();
@@ -728,6 +732,7 @@ mod http_server_tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: None,
+            ..Default::default()
         };
 
         let server_addr = addr.clone();
@@ -767,6 +772,7 @@ mod http_server_tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: None,
+            ..Default::default()
         };
 
         // Shared counter
@@ -812,6 +818,7 @@ mod http_server_tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: None,
+            ..Default::default()
         };
 
         let server_addr = addr.clone();
@@ -963,6 +970,7 @@ mod http_server_tests {
                 name: "test-auth".into(),
                 version: "1.0.0".into(),
                 instructions: None,
+                ..Default::default()
             };
 
             let server_addr = addr.clone();
@@ -999,6 +1007,7 @@ mod http_server_tests {
                 name: "test-auth".into(),
                 version: "1.0.0".into(),
                 instructions: None,
+                ..Default::default()
             };
 
             let server_addr = addr.clone();
@@ -1035,6 +1044,7 @@ mod http_server_tests {
                 name: "test-auth".into(),
                 version: "1.0.0".into(),
                 instructions: None,
+                ..Default::default()
             };
 
             let server_addr = addr.clone();

@@ -2,7 +2,7 @@
 //!
 //! Core server implementation with generic context support.
 
-use crate::pagination::{paginate, PageState, DEFAULT_PAGE_SIZE};
+use crate::pagination::{DEFAULT_PAGE_SIZE, PageState, paginate};
 use crate::transport::Transport;
 use crate::types::*;
 use serde_json::Value;

@@ -18,7 +18,7 @@ pub mod types;
 pub mod auth;
 
 // Re-export commonly used types
-pub use pagination::{paginate, PageState, DEFAULT_PAGE_SIZE};
+pub use pagination::{DEFAULT_PAGE_SIZE, PageState, paginate};
 pub use server::{LogLevel, PromptDef, Resource, Server, ServerConfig, Tool, ToolEnv};
 pub use transport::{StdioTransport, Transport};
 pub use types::*;
