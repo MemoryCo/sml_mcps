@@ -122,6 +122,7 @@ fn main() -> Result<()> {
         name: "authenticated-http".to_string(),
         version: "1.0.0".to_string(),
         instructions: None,
+        ..Default::default()
     };
 
     HttpServer::new(config)

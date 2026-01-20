@@ -14,6 +14,7 @@ categories = ["network-programming", "api-bindings"]
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "2"
+base64 = "0.22"
 
 # JSON Schema generation for tools
 schemars = { version = "1.0", optional = true }

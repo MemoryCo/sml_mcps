@@ -169,6 +169,7 @@ fn main() -> Result<()> {
              Use 'echo' to echo messages, and 'counter_*' tools to manage a counter."
                 .to_string(),
         ),
+        ..Default::default()
     };
 
     let mut server = Server::new(config);

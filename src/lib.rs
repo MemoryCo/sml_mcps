@@ -9,6 +9,7 @@
 //! - `auth` - JWT validation for hosted deployments
 //! - `hosted` - Enables both `http` and `auth`
 
+pub mod pagination;
 pub mod server;
 pub mod transport;
 pub mod types;
@@ -17,6 +18,7 @@ pub mod types;
 pub mod auth;
 
 // Re-export commonly used types
+pub use pagination::{paginate, PageState, DEFAULT_PAGE_SIZE};
 pub use server::{LogLevel, PromptDef, Resource, Server, ServerConfig, Tool, ToolEnv};
 pub use transport::{StdioTransport, Transport};
 pub use types::*;

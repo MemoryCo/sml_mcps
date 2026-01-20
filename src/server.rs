@@ -2,6 +2,7 @@
 //!
 //! Core server implementation with generic context support.
 
+use crate::pagination::{paginate, PageState, DEFAULT_PAGE_SIZE};
 use crate::transport::Transport;
 use crate::types::*;
 use serde_json::Value;
@@ -176,6 +177,8 @@ pub struct ServerConfig {
     pub name: String,
     pub version: String,
     pub instructions: Option<String>,
+    /// Page size for list operations (tools, resources, prompts)
+    pub page_size: usize,
 }
 
 impl Default for ServerConfig {
@@ -184,6 +187,7 @@ impl Default for ServerConfig {
             name: "sml_mcps".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             instructions: None,
+            page_size: DEFAULT_PAGE_SIZE,
         }
     }
 }
@@ -348,11 +352,11 @@ impl<C: Send + Sync + 'static> Server<C> {
         match request.method.as_str() {
             "initialize" => self.handle_initialize(request),
             "ping" => self.handle_ping(),
-            "tools/list" => self.handle_list_tools(),
+            "tools/list" => self.handle_list_tools(request),
             "tools/call" => self.handle_call_tool(request, context),
-            "resources/list" => self.handle_list_resources(),
+            "resources/list" => self.handle_list_resources(request),
             "resources/read" => self.handle_read_resource(request),
-            "prompts/list" => self.handle_list_prompts(),
+            "prompts/list" => self.handle_list_prompts(request),
             "prompts/get" => self.handle_get_prompt(request),
             method => Err(McpError::MethodNotFound(method.to_string())),
         }
@@ -401,8 +405,14 @@ impl<C: Send + Sync + 'static> Server<C> {
         Ok(serde_json::to_value(PingResult {})?)
     }
 
-    fn handle_list_tools(&self) -> Result<Value> {
-        let tools: Vec<crate::types::Tool> = self
+    fn handle_list_tools(&self, request: &JsonRpcRequest) -> Result<Value> {
+        let params: ListToolsParams = match &request.params {
+            Some(p) => serde_json::from_value(p.clone())?,
+            None => ListToolsParams::default(),
+        };
+
+        // Collect all tools (sorted for consistent pagination)
+        let mut all_tools: Vec<crate::types::Tool> = self
             .tools
             .values()
             .map(|t| crate::types::Tool {
@@ -411,10 +421,15 @@ impl<C: Send + Sync + 'static> Server<C> {
                 input_schema: t.schema(),
             })
             .collect();
+        all_tools.sort_by(|a, b| a.name.cmp(&b.name));
+
+        // Apply pagination
+        let state = PageState::from_cursor(params.cursor.as_deref(), self.config.page_size);
+        let (tools, next_cursor) = paginate(&all_tools, &state);
 
         Ok(serde_json::to_value(ListToolsResult {
             tools,
-            next_cursor: None,
+            next_cursor,
         })?)
     }
 
@@ -443,16 +458,27 @@ impl<C: Send + Sync + 'static> Server<C> {
         Ok(serde_json::to_value(result)?)
     }
 
-    fn handle_list_resources(&self) -> Result<Value> {
-        let resources: Vec<crate::types::Resource> = self
+    fn handle_list_resources(&self, request: &JsonRpcRequest) -> Result<Value> {
+        let params: ListResourcesParams = match &request.params {
+            Some(p) => serde_json::from_value(p.clone())?,
+            None => ListResourcesParams::default(),
+        };
+
+        // Collect all resources (sorted for consistent pagination)
+        let mut all_resources: Vec<crate::types::Resource> = self
             .resources
             .values()
             .map(|r| r.as_protocol_resource())
             .collect();
+        all_resources.sort_by(|a, b| a.uri.cmp(&b.uri));
+
+        // Apply pagination
+        let state = PageState::from_cursor(params.cursor.as_deref(), self.config.page_size);
+        let (resources, next_cursor) = paginate(&all_resources, &state);
 
         Ok(serde_json::to_value(ListResourcesResult {
             resources,
-            next_cursor: None,
+            next_cursor,
         })?)
     }
 
@@ -471,16 +497,27 @@ impl<C: Send + Sync + 'static> Server<C> {
         Ok(serde_json::to_value(ReadResourceResult { contents })?)
     }
 
-    fn handle_list_prompts(&self) -> Result<Value> {
-        let prompts: Vec<Prompt> = self
+    fn handle_list_prompts(&self, request: &JsonRpcRequest) -> Result<Value> {
+        let params: ListPromptsParams = match &request.params {
+            Some(p) => serde_json::from_value(p.clone())?,
+            None => ListPromptsParams::default(),
+        };
+
+        // Collect all prompts (sorted for consistent pagination)
+        let mut all_prompts: Vec<Prompt> = self
             .prompts
             .values()
             .map(|p| p.as_protocol_prompt())
             .collect();
+        all_prompts.sort_by(|a, b| a.name.cmp(&b.name));
+
+        // Apply pagination
+        let state = PageState::from_cursor(params.cursor.as_deref(), self.config.page_size);
+        let (prompts, next_cursor) = paginate(&all_prompts, &state);
 
         Ok(serde_json::to_value(ListPromptsResult {
             prompts,
-            next_cursor: None,
+            next_cursor,
         })?)
     }
 
@@ -796,6 +833,7 @@ mod tests {
             name: "test-server".into(),
             version: "1.0.0".into(),
             instructions: Some("test instructions".into()),
+            ..Default::default()
         });
         server.add_tool(IncrementTool).unwrap();
 
@@ -1399,5 +1437,121 @@ mod tests {
         assert!(!result["capabilities"]["tools"].is_null());
         assert!(!result["capabilities"]["resources"].is_null());
         assert!(!result["capabilities"]["prompts"].is_null());
+    }
+
+    // Helper tool for pagination tests - creates many tools
+    struct NumberedTool(u32);
+
+    impl Tool<TestContext> for NumberedTool {
+        fn name(&self) -> &str {
+            // This is a bit hacky but works for tests
+            Box::leak(format!("tool_{:03}", self.0).into_boxed_str())
+        }
+        fn description(&self) -> &str {
+            "A numbered tool"
+        }
+        fn schema(&self) -> Value {
+            serde_json::json!({"type": "object"})
+        }
+        fn execute(
+            &self,
+            _args: Value,
+            _ctx: &mut TestContext,
+            _env: &ToolEnv,
+        ) -> Result<CallToolResult> {
+            Ok(CallToolResult::text(format!("Tool {}", self.0)))
+        }
+    }
+
+    #[test]
+    fn test_pagination_tools_list() {
+        // Create server with small page size
+        let mut server: Server<TestContext> = Server::new(ServerConfig {
+            page_size: 3,
+            ..Default::default()
+        });
+
+        // Add 10 tools
+        for i in 0..10 {
+            server.add_tool(NumberedTool(i)).unwrap();
+        }
+
+        let mut ctx = TestContext { counter: 0 };
+
+        // First page - no cursor
+        let req = JsonRpcRequest {
+            jsonrpc: Default::default(),
+            id: RequestId::Number(1),
+            method: "tools/list".to_string(),
+            params: None,
+        };
+        let result = server.dispatch_request(&req, &mut ctx).unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 3);
+        assert_eq!(tools[0]["name"], "tool_000");
+        assert_eq!(tools[2]["name"], "tool_002");
+        let next_cursor = result["nextCursor"].as_str().unwrap();
+
+        // Second page - with cursor
+        let req2 = JsonRpcRequest {
+            jsonrpc: Default::default(),
+            id: RequestId::Number(2),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({ "cursor": next_cursor })),
+        };
+        let result2 = server.dispatch_request(&req2, &mut ctx).unwrap();
+        let tools2 = result2["tools"].as_array().unwrap();
+        assert_eq!(tools2.len(), 3);
+        assert_eq!(tools2[0]["name"], "tool_003");
+        assert_eq!(tools2[2]["name"], "tool_005");
+        let next_cursor2 = result2["nextCursor"].as_str().unwrap();
+
+        // Third page
+        let req3 = JsonRpcRequest {
+            jsonrpc: Default::default(),
+            id: RequestId::Number(3),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({ "cursor": next_cursor2 })),
+        };
+        let result3 = server.dispatch_request(&req3, &mut ctx).unwrap();
+        let tools3 = result3["tools"].as_array().unwrap();
+        assert_eq!(tools3.len(), 3);
+        assert_eq!(tools3[0]["name"], "tool_006");
+        let next_cursor3 = result3["nextCursor"].as_str().unwrap();
+
+        // Fourth (last) page - only 1 item left
+        let req4 = JsonRpcRequest {
+            jsonrpc: Default::default(),
+            id: RequestId::Number(4),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({ "cursor": next_cursor3 })),
+        };
+        let result4 = server.dispatch_request(&req4, &mut ctx).unwrap();
+        let tools4 = result4["tools"].as_array().unwrap();
+        assert_eq!(tools4.len(), 1);
+        assert_eq!(tools4[0]["name"], "tool_009");
+        assert!(result4["nextCursor"].is_null()); // No more pages
+    }
+
+    #[test]
+    fn test_pagination_invalid_cursor() {
+        let mut server: Server<TestContext> = Server::new(ServerConfig {
+            page_size: 3,
+            ..Default::default()
+        });
+        server.add_tool(IncrementTool).unwrap();
+
+        let mut ctx = TestContext { counter: 0 };
+
+        // Invalid cursor should default to first page
+        let req = JsonRpcRequest {
+            jsonrpc: Default::default(),
+            id: RequestId::Number(1),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({ "cursor": "garbage" })),
+        };
+        let result = server.dispatch_request(&req, &mut ctx).unwrap();
+        let tools = result["tools"].as_array().unwrap();
+        assert_eq!(tools.len(), 1); // Should get the one tool
     }
 }

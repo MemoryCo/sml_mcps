@@ -142,6 +142,7 @@ fn main() -> Result<()> {
         name: "simple-http".to_string(),
         version: "1.0.0".to_string(),
         instructions: Some("A simple HTTP MCP server with echo and counter tools.".to_string()),
+        ..Default::default()
     };
 
     HttpServer::new(config)
