@@ -88,61 +88,101 @@ fn main() -> Result<()> {
 
 ## HTTP Transport (Streamable HTTP with SSE)
 
-With the `http` feature, you can serve over HTTP using the 2025-03-26 spec.
-
-**Key feature**: When tools send notifications (via `env.log()` or `env.send_progress()`), 
-the response is automatically formatted as SSE:
-
-```
-data: {"method":"notifications/message","params":{...},"jsonrpc":"2.0"}
-
-data: {"id":1,"result":{...},"jsonrpc":"2.0"}
-
-```
-
-For requests without notifications, plain JSON is returned.
+With the `http` feature, `HttpServer` handles all the HTTP boilerplate for you:
 
 ```rust
-use sml_mcps::{Server, ServerConfig, HttpTransport};
-use std::sync::{Arc, Mutex};
+use sml_mcps::{HttpServer, ServerConfig, Tool, ToolEnv, CallToolResult, Result};
+use serde_json::Value;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
-// In your HTTP handler:
-let transport = Arc::new(Mutex::new(HttpTransport::new(request_body)));
+struct CounterTool;
 
-server.process_one(transport.clone(), &mut context)?;
+impl Tool<AppContext> for CounterTool {
+    fn name(&self) -> &str { "counter" }
+    fn description(&self) -> &str { "Increment counter" }
+    fn schema(&self) -> Value { serde_json::json!({ "type": "object" }) }
+    
+    fn execute(&self, _args: Value, ctx: &mut AppContext, _env: &ToolEnv) -> Result<CallToolResult> {
+        let val = ctx.counter.fetch_add(1, Ordering::SeqCst) + 1;
+        Ok(CallToolResult::text(format!("Counter: {}", val)))
+    }
+}
 
-let mut t = transport.lock().unwrap();
-if t.has_notifications() {
-    // Tool sent notifications - return as SSE
-    let sse_body = t.take_sse_response();
-    // Set Content-Type: text/event-stream
-} else {
-    // No notifications - return plain JSON
-    let json_body = t.take_response().unwrap_or_default();
-    // Set Content-Type: application/json  
+struct AppContext {
+    counter: Arc<AtomicI64>,
+}
+
+fn main() -> Result<()> {
+    let shared_counter = Arc::new(AtomicI64::new(0));
+    
+    let config = ServerConfig {
+        name: "my-http-server".to_string(),
+        version: "1.0.0".to_string(),
+        instructions: None,
+    };
+
+    HttpServer::new(config)
+        .endpoint("/mcp")  // optional, this is the default
+        .with_tools(|server| {
+            server.add_tool(CounterTool)?;
+            Ok(())
+        })
+        .serve("127.0.0.1:3000", {
+            let counter = shared_counter.clone();
+            move || AppContext { counter: counter.clone() }
+        })
 }
 ```
 
-See `examples/http_server.rs` for a complete tiny_http example.
+**Key feature**: When tools send notifications (via `env.log()` or `env.send_progress()`), 
+the response is automatically formatted as SSE. For requests without notifications, plain JSON is returned.
+
+See `examples/http_server.rs` for a complete example.
 
 ## JWT Authentication
 
-With the `auth` feature, validate JWT tokens for hosted deployments:
+With the `hosted` feature (enables both `http` and `auth`), add JWT validation:
 
 ```rust
-use sml_mcps::auth::{JwtValidator, Claims};
+use sml_mcps::{HttpServer, ServerConfig, auth::JwtValidator};
 
+struct AuthContext {
+    user_id: String,
+    tenant_id: String,
+}
+
+fn main() -> Result<()> {
+    let config = ServerConfig {
+        name: "authenticated-server".to_string(),
+        version: "1.0.0".to_string(),
+        instructions: None,
+    };
+
+    HttpServer::new(config)
+        .with_tools(|server| {
+            server.add_tool(WhoamiTool)?;
+            Ok(())
+        })
+        .serve_with_auth(
+            "127.0.0.1:3001",
+            JwtValidator::hs256(b"your-secret-key"),
+            |claims| AuthContext {
+                user_id: claims.user_id().to_string(),
+                tenant_id: claims.tenant_id().to_string(),
+            },
+        )
+}
+```
+
+The validator supports both HS256 (symmetric) and RS256 (asymmetric) algorithms:
+
+```rust
 // HS256 (symmetric)
 let validator = JwtValidator::hs256(b"your-secret-key");
 
 // RS256 (asymmetric)  
 let validator = JwtValidator::rs256(&public_key_pem)?;
-
-// Validate from Authorization header
-let claims: Claims = validator.validate_header("Bearer eyJ...")?;
-
-println!("User: {}", claims.user_id());
-println!("Tenant: {}", claims.tenant_id());
 ```
 
 See `examples/http_auth.rs` for a complete authenticated server.
@@ -161,6 +201,29 @@ env.send_progress("token", 0.5, Some(1.0))?;
 // Access resources
 let uris = env.list_resources();
 let resource = env.get_resource("my://resource")?;
+```
+
+## Low-Level HTTP (Advanced)
+
+If you need custom HTTP handling, you can use `HttpTransport` directly:
+
+```rust
+use sml_mcps::{Server, ServerConfig, HttpTransport};
+use std::sync::{Arc, Mutex};
+
+// In your HTTP handler:
+let transport = Arc::new(Mutex::new(HttpTransport::new(request_body)));
+
+server.process_one(transport.clone(), &mut context)?;
+
+let mut t = transport.lock().unwrap();
+if t.has_notifications() {
+    // Return as SSE (Content-Type: text/event-stream)
+    let sse_body = t.take_sse_response();
+} else {
+    // Return plain JSON (Content-Type: application/json)
+    let json_body = t.take_response().unwrap_or_default();
+}
 ```
 
 ## Protocol Version
