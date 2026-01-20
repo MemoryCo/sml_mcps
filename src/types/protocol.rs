@@ -109,6 +109,77 @@ pub struct Tool {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     pub input_schema: Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub annotations: Option<ToolAnnotations>,
+}
+
+/// Tool behavior hints for clients
+///
+/// These hints help clients understand tool behavior:
+/// - `read_only_hint`: Tool only reads data, never modifies
+/// - `idempotent_hint`: Multiple calls with same args have same effect as one call
+/// - `destructive_hint`: Tool may overwrite or heavily mutate data
+///
+/// All hints default to false/None when not specified.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolAnnotations {
+    /// If true, the tool only reads data and never modifies anything
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub read_only_hint: bool,
+    
+    /// If true, calling multiple times with same args has same effect as once
+    /// Only meaningful when read_only_hint is false
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub idempotent_hint: bool,
+    
+    /// If true, tool may overwrite or heavily mutate data
+    /// Only meaningful when read_only_hint is false
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub destructive_hint: bool,
+}
+
+impl ToolAnnotations {
+    /// Create annotations for a read-only tool
+    pub fn read_only() -> Self {
+        Self {
+            read_only_hint: true,
+            idempotent_hint: false,
+            destructive_hint: false,
+        }
+    }
+
+    /// Create annotations for an idempotent write tool
+    pub fn idempotent() -> Self {
+        Self {
+            read_only_hint: false,
+            idempotent_hint: true,
+            destructive_hint: false,
+        }
+    }
+
+    /// Create annotations for a destructive write tool
+    pub fn destructive() -> Self {
+        Self {
+            read_only_hint: false,
+            idempotent_hint: false,
+            destructive_hint: true,
+        }
+    }
+
+    /// Create annotations for an idempotent but destructive tool (e.g., write_file)
+    pub fn idempotent_destructive() -> Self {
+        Self {
+            read_only_hint: false,
+            idempotent_hint: true,
+            destructive_hint: true,
+        }
+    }
+
+    /// Check if any hints are set (for skip_serializing)
+    pub fn is_empty(&self) -> bool {
+        !self.read_only_hint && !self.idempotent_hint && !self.destructive_hint
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]

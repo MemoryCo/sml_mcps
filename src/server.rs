@@ -103,6 +103,18 @@ pub trait Tool<C>: Send + Sync {
     /// JSON Schema for input arguments
     fn schema(&self) -> Value;
 
+    /// Tool behavior annotations (hints for clients)
+    ///
+    /// Override this to provide hints about tool behavior:
+    /// - `read_only_hint`: Tool only reads, never modifies
+    /// - `idempotent_hint`: Safe to retry (same result on repeat calls)
+    /// - `destructive_hint`: May overwrite or heavily mutate data
+    ///
+    /// Default returns None (no hints).
+    fn annotations(&self) -> Option<ToolAnnotations> {
+        None
+    }
+
     /// Execute the tool
     fn execute(&self, args: Value, context: &mut C, env: &ToolEnv) -> Result<CallToolResult>;
 }
@@ -419,6 +431,7 @@ impl<C: Send + Sync + 'static> Server<C> {
                 name: t.name().to_string(),
                 description: Some(t.description().to_string()),
                 input_schema: t.schema(),
+                annotations: t.annotations(),
             })
             .collect();
         all_tools.sort_by(|a, b| a.name.cmp(&b.name));
