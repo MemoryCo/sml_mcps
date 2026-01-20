@@ -1,3 +1,13 @@
+## v0.3.0
+
+### Changes (feature)
+
+- Add Apache 2 licensing as reason for sml_mcps (956a8d4)
+- refactor https stuff to reduce boilerplate. (a6e5d53)
+- Clippy fixes (ffcb351)
+- Readme updates (7b2a365)
+- release flow updates (7175849)
+
 ## v0.2.0
 
 ### Changes
