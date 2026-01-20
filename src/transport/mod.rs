@@ -10,7 +10,7 @@ mod http;
 pub use stdio::StdioTransport;
 
 #[cfg(feature = "http")]
-pub use http::HttpTransport;
+pub use http::{HttpServer, HttpTransport};
 
 use crate::types::{JsonRpcMessage, Result};
 

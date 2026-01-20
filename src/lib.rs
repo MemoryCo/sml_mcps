@@ -22,4 +22,4 @@ pub use transport::{StdioTransport, Transport};
 pub use types::*;
 
 #[cfg(feature = "http")]
-pub use transport::HttpTransport;
+pub use transport::{HttpServer, HttpTransport};
