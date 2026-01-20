@@ -1,3 +1,11 @@
+## v0.4.0
+
+### Changes (feature)
+
+- pagination support (723b63c)
+- added tool annotations (6688323)
+- local ci checks + fmt (0a10336)
+
 ## v0.3.0
 
 ### Changes (feature)
